@@ -53,6 +53,8 @@ function dty_sync_opengraph_image_pull( $new_post, $connection, $post_array ) {
 	foreach ( dty_yoast_meta_keys() as $yoast_meta_key ) {
 		if ( isset( $post_array['meta'][ $yoast_meta_key . '-id' ] ) ) {
 			dty_sync_opengraph_image( $new_post, $post_array['meta'][ $yoast_meta_key . '-id' ], $yoast_meta_key );
+		} else {
+			dty_remove_opengraph_image( $new_post, $yoast_meta_key );
 		}
 	}
 }
@@ -82,6 +84,8 @@ function dty_process_attributes( $new_post, $request, $update = false ) {
 	foreach ( dty_yoast_meta_keys() as $yoast_meta_key ) {
 		if ( isset( $meta[ $yoast_meta_key . '-id' ] ) && ! empty( $meta[ $yoast_meta_key . '-id' ] ) ) {
 			dty_sync_opengraph_image( $new_post, $meta[ $yoast_meta_key . '-id' ], $yoast_meta_key );
+		} else {
+			dty_remove_opengraph_image( $new_post, $yoast_meta_key );
 		}
 	}
 }
@@ -161,4 +165,32 @@ function dty_sync_opengraph_image( $new_post, $dt_original_media_id, $yoast_meta
 		}
 		wp_reset_postdata();
 	}
+}
+
+/**
+ * Delete Yoast meta fields
+ *
+ * @param int|object $new_post The new post's ID or a post object.
+ * @param string     $yoast_meta_key The meta key for the Yoast image. Example: _yoast_wpseo_opengraph-image or _yoast_wpseo_twitter-image. The suffix '-id' will be appended.
+ */
+function dty_remove_opengraph_image( $new_post, $yoast_meta_key ) {
+	/**
+	 * If $new_post is an object, get the ID. Otherwise use $new_post.
+	 */
+	$new_post_id = 0;
+	if ( is_numeric( $new_post ) ) {
+		$new_post_id = $new_post;
+	} elseif ( is_object( $new_post ) && isset( $new_post->ID ) ) {
+		$new_post_id = $new_post->ID;
+	}
+
+	/**
+	 * No post ID, return.
+	 */
+	if ( $new_post_id === 0 ) {
+		return false;
+	}
+
+	delete_post_meta( $new_post_id, $yoast_meta_key );
+	delete_post_meta( $new_post_id, $yoast_meta_key . '-id' );
 }
