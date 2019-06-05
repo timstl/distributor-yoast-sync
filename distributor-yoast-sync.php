@@ -32,15 +32,35 @@ require_once plugin_dir_path( __FILE__ ) . 'lib/utils.php';
  *
  * Example: _yoast_wpseo_opengraph-image is the URL and _yoast_wpseo_opengraph-image-id is the media ID.
  */
-function dty_yoast_meta_keys() {
+function dty_yoast_meta_keys( $prepend = '_' ) {
 	return apply_filters(
 		'dty_yoast_meta_keys',
 		array(
-			'_yoast_wpseo_opengraph-image',
-			'_yoast_wpseo_twitter-image',
+			$prepend . 'yoast_wpseo_opengraph-image',
+			$prepend . 'yoast_wpseo_twitter-image',
 		)
 	);
 }
+
+/**
+ * Fix opengraph tags on sending site.
+ * When a notification is sent, Yoast has not yet saved the new Open Graph images for some reason.
+ */
+function dty_fix_opengraph_meta_on_update( $post_body, $post ) {
+
+	foreach ( dty_yoast_meta_keys( '' ) as $yoast_meta_key ) {
+		if ( isset( $_POST[ $yoast_meta_key ] ) && isset ( $_POST[ $yoast_meta_key . '-id' ] ) ) {
+			$post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ][0]         = $_POST[ $yoast_meta_key ];
+			$post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key . '-id' ][0] = intval( $_POST[ $yoast_meta_key . '-id' ] );
+		} elseif ( ! isset( $_POST[ $yoast_meta_key ] ) && isset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ][0] ) ) {
+			unset( $post_body['distributor_meta'][ '_' . $yoast_meta_key ] );
+			unset( $post_body['distributor_meta'][ '_' . $yoast_meta_key . '-id' ] );
+		}
+	}
+
+	return $post_body;
+}
+add_filter( 'dt_subscription_post_args', 'dty_fix_opengraph_meta_on_update', 1, 2 );
 
 /**
  * Hook into Distributor's pull post action: dt_pull_post
@@ -164,6 +184,12 @@ function dty_sync_opengraph_image( $new_post, $dt_original_media_id, $yoast_meta
 			}
 		}
 		wp_reset_postdata();
+
+	} else {
+		/**
+		 * If we don't find the correct media, delete the meta keys.
+		 */
+		dty_remove_opengraph_image( $new_post_id, $yoast_meta_key );
 	}
 }
 
