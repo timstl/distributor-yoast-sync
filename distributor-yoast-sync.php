@@ -144,7 +144,7 @@ function dty_sync_opengraph_image( $new_post, $dt_original_media_id, $yoast_meta
 			$c_query->the_post();
 
 			$new_media_id  = $post->ID;
-			$new_media_url = wp_get_attachment_image_url( $new_media_id );
+			$new_media_url = wp_get_attachment_image_url( $new_media_id, 'full' );
 
 			/**
 			 * If we find a new media ID and a new URL, update both Yoast meta keys.
