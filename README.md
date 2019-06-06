@@ -1,4 +1,4 @@
-# Distributor / Yoast Sync
+# Distributor - Yoast Sync
 
 Extends the [Distributor plugin](https://github.com/10up/distributor) by 10up to sync Yoast SEO settings more properly. This plugin adds 2 primary enhancements:
 

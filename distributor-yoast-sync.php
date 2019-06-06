@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:     Distributor / Yoast Sync
+ * Plugin Name:     Distributor - Yoast Sync
  * Plugin URI:      https://github.com/timstl/distributor-yoast-sync
  * Description:     Sync social images, titles and descriptions and meta information from Yoast SEO when post is pushed or pulled by Distributor plugin.
  * Version:         1.0.3
