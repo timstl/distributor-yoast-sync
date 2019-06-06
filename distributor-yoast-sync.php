@@ -79,7 +79,7 @@ function dty_yoast_image_meta_keys( $prepend = '_' ) {
 
 /**
  * Update opengraph meta on sending site, prior to subscription pushing.
- * When a notification is sent, Yoast has not yet saved the new Open Graph data. This action fires prior to that.
+ * When a notification is sent, Yoast has not yet saved the new Open Graph data. This filter fires prior to that.
  * We'll take the $_POST data and update the $post_body using Yoast's sanitize functions.
  * This feels like a big hack, but without it new opengraph meta is only sent on the next update.
  *
