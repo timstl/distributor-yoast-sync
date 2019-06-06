@@ -2,8 +2,8 @@
 /**
  * Plugin Name:     Distributor / Yoast Sync
  * Plugin URI:      https://github.com/timstl/distributor-yoast-sync
- * Description:     Sync social images, meta titles and descriptions from Yoast SEO when post is pushed or pulled by Distributor plugin.
- * Version:         1.0.2
+ * Description:     Sync social images, titles and descriptions and meta information from Yoast SEO when post is pushed or pulled by Distributor plugin.
+ * Version:         1.0.3
  * Author:          Tim Gieseking, timstl@gmail.com
  * Author URI:      http://timgweb.com/
  * License:         GPL-2.0+
@@ -40,10 +40,14 @@ function dty_yoast_meta_keys( $prepend = '_' ) {
 		array(
 			'yoast_wpseo_opengraph-image'       => 'image',
 			'yoast_wpseo_twitter-image'         => 'image',
+			'yoast_wpseo_title'                 => 'text',
 			'yoast_wpseo_opengraph-title'       => 'text',
 			'yoast_wpseo_twitter-title'         => 'text',
+			'yoast_wpseo_metadesc'              => 'textarea',
 			'yoast_wpseo_opengraph-description' => 'textarea',
 			'yoast_wpseo_twitter-description'   => 'textarea',
+			'yoast_wpseo_meta-robots-noindex'   => 'int',
+			'yoast_wpseo_meta-robots-nofollow'  => 'int',
 		)
 	);
 
@@ -157,6 +161,20 @@ function dty_fix_opengraph_meta_on_update( $post_body, $post ) {
 				}
 
 				$post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ][0] = WPSEO_Utils::sanitize_text_field( $value );
+			} else {
+				/**
+				 * Delete
+				 */
+				if ( isset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ] ) ) {
+					unset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ] );
+				}
+			}
+		} elseif ( 'int' === $type ) {
+			/**
+			 * Sanitize integers (robot settings);
+			 */
+			if ( isset( $_POST[ $yoast_meta_key ] ) ) {
+				$post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ][0] = intval( $_POST[ $yoast_meta_key ] );
 			} else {
 				/**
 				 * Delete
