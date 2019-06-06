@@ -3,7 +3,7 @@
  * Plugin Name:     Distributor / Yoast Sync
  * Plugin URI:      https://github.com/timstl/distributor-yoast-sync
  * Description:     Sync social images from Yoast SEO when post is pushed or pulled by Distributor plugin.
- * Version:         1.0
+ * Version:         1.0.1
  * Author:          Tim Gieseking, timstl@gmail.com
  * Author URI:      http://timgweb.com/
  * License:         GPL-2.0+
@@ -33,28 +33,75 @@ require_once plugin_dir_path( __FILE__ ) . 'lib/utils.php';
  * Example: _yoast_wpseo_opengraph-image is the URL and _yoast_wpseo_opengraph-image-id is the media ID.
  */
 function dty_yoast_meta_keys( $prepend = '_' ) {
-	return apply_filters(
+	/**
+	 * Allow filtering of meta keys.
+	 */
+	$meta_keys = apply_filters(
 		'dty_yoast_meta_keys',
 		array(
-			$prepend . 'yoast_wpseo_opengraph-image',
-			$prepend . 'yoast_wpseo_twitter-image',
+			'yoast_wpseo_opengraph-image',
+			'yoast_wpseo_twitter-image',
 		)
 	);
+
+	/**
+	 * Add prefix to each key.
+	 */
+	$prepended = array();
+	foreach ( $meta_keys as $meta_key ) {
+		$prepended[] = $prepend . $meta_key;
+	}
+
+	return $prepended;
 }
 
 /**
- * Fix opengraph tags on sending site.
+ * Update opengraph meta on sending site, prior to subscription pushing.
  * When a notification is sent, Yoast has not yet saved the new Open Graph images for some reason.
+ * This feels like a big hack, but without it new opengraph meta is only sent after updating twice.
+ *
+ * @param  array  $post_body The request body to send.
+ * @param  object $post      The WP_Post that is being pushed.
  */
 function dty_fix_opengraph_meta_on_update( $post_body, $post ) {
 
+	/**
+	 * The $_POST keys are not prepended with `_` but the $post_body keys are prepended.
+	 */
 	foreach ( dty_yoast_meta_keys( '' ) as $yoast_meta_key ) {
-		if ( isset( $_POST[ $yoast_meta_key ] ) && isset ( $_POST[ $yoast_meta_key . '-id' ] ) ) {
-			$post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ][0]         = $_POST[ $yoast_meta_key ];
-			$post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key . '-id' ][0] = intval( $_POST[ $yoast_meta_key . '-id' ] );
-		} elseif ( ! isset( $_POST[ $yoast_meta_key ] ) && isset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ][0] ) ) {
-			unset( $post_body['distributor_meta'][ '_' . $yoast_meta_key ] );
-			unset( $post_body['distributor_meta'][ '_' . $yoast_meta_key . '-id' ] );
+		$image_id  = 0;
+		$image_url = null;
+		if ( isset( $_POST[ $yoast_meta_key . '-id' ] ) ) {
+			/**
+			 * If the new ID is set in $_POST, try to get the attachment using this URL.
+			 * This seems more reliable and safe than using the URL from $_POST.
+			 * If for some reason we can't get the attachment URL, use the one in $_POST.
+			 */
+			$image_id  = intval( $_POST[ $yoast_meta_key . '-id' ] );
+			$image_url = wp_get_attachment_url( $image_id );
+			if ( ! $image_url ) {
+				$image_url = wp_strip_all_tags( $_POST[ $yoast_meta_key ] );
+			}
+
+			/**
+			 * Update the distributor_meta in $post_body.
+			 */
+			if ( $image_id > 0 && $image_url ) {
+				$post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key . '-id' ][0] = $image_id;
+				$post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ][0]         = $image_url;
+			}
+		}
+
+		if ( $image_id <= 0 || ! $image_url ) {
+			/**
+			 * No ID in $post_body for this key. Unset from meta to delete from receiving site.
+			 */
+			if ( isset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ] ) ) {
+				unset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ] );
+			}
+			if ( isset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key . '-id' ] ) ) {
+				unset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key . '-id' ] );
+			}
 		}
 	}
 
