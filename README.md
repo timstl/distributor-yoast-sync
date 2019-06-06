@@ -1,6 +1,6 @@
 # Distributor - Yoast Sync
 
-Extends the [Distributor plugin](https://github.com/10up/distributor) by 10up to sync Yoast SEO settings more properly. This plugin adds 2 primary enhancements:
+Extends the [Distributor plugin](https://github.com/10up/distributor) by 10up to sync Yoast SEO settings correctly. This plugin adds 2 primary enhancements:
 
 1.  Social images set in Yoast are fixed when pushed or pulled to another site. The image IDs are pointed to the correct local image by looking for a `dt_original_media_id` meta value.
 2.  When updating a post, Yoast meta fields save AFTER updates are synced to a connected post. This means you have to hit 'Update' twice to sync your new meta data. This plugin solves by updating the meta data with new Yoast information prior to it being synced.
