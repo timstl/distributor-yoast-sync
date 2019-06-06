@@ -2,8 +2,8 @@
 /**
  * Plugin Name:     Distributor / Yoast Sync
  * Plugin URI:      https://github.com/timstl/distributor-yoast-sync
- * Description:     Sync social images from Yoast SEO when post is pushed or pulled by Distributor plugin.
- * Version:         1.0.1
+ * Description:     Sync social images, meta titles and descriptions from Yoast SEO when post is pushed or pulled by Distributor plugin.
+ * Version:         1.0.2
  * Author:          Tim Gieseking, timstl@gmail.com
  * Author URI:      http://timgweb.com/
  * License:         GPL-2.0+
@@ -27,38 +27,61 @@ if ( ! defined( 'WPINC' ) ) {
 require_once plugin_dir_path( __FILE__ ) . 'lib/utils.php';
 
 /**
- * The Yoast meta keys to sync.
- * These will have '-id' appended to the end of the key.
+ * The Yoast meta keys to sync in type => key format.
+ * Image keys will have '-id' appended to the end of the key.
  *
  * Example: _yoast_wpseo_opengraph-image is the URL and _yoast_wpseo_opengraph-image-id is the media ID.
+ *
+ * @param  string $prepend      The string prepended to the key (should be `_` or sometimes blank).
  */
 function dty_yoast_meta_keys( $prepend = '_' ) {
-	/**
-	 * Allow filtering of meta keys.
-	 */
 	$meta_keys = apply_filters(
 		'dty_yoast_meta_keys',
 		array(
-			'yoast_wpseo_opengraph-image',
-			'yoast_wpseo_twitter-image',
+			'yoast_wpseo_opengraph-image'       => 'image',
+			'yoast_wpseo_twitter-image'         => 'image',
+			'yoast_wpseo_opengraph-title'       => 'text',
+			'yoast_wpseo_twitter-title'         => 'text',
+			'yoast_wpseo_opengraph-description' => 'textarea',
+			'yoast_wpseo_twitter-description'   => 'textarea',
 		)
 	);
 
-	/**
-	 * Add prefix to each key.
-	 */
-	$prepended = array();
-	foreach ( $meta_keys as $meta_key ) {
-		$prepended[] = $prepend . $meta_key;
+	if ( $prepend != '' ) {
+		$prepended = array();
+		foreach ( $meta_keys as $meta_key => $type ) {
+			$prepended[ $prepend . $meta_key ] = $type;
+		}
+	} else {
+		$prepended = $meta_keys;
 	}
 
 	return $prepended;
 }
 
 /**
+ * Return only image meta keys.
+ *
+ * @param  string $prepend      The string prepended to the key (should be `_` or sometimes blank).
+ */
+function dty_yoast_image_meta_keys( $prepend = '_' ) {
+	$meta_keys  = dty_yoast_meta_keys( $prepend );
+	$image_keys = array();
+
+	foreach ( $meta_keys as $meta_key => $type ) {
+		if ( 'image' === $type ) {
+			$image_keys[] = $meta_key;
+		}
+	}
+
+	return $image_keys;
+}
+
+/**
  * Update opengraph meta on sending site, prior to subscription pushing.
- * When a notification is sent, Yoast has not yet saved the new Open Graph images for some reason.
- * This feels like a big hack, but without it new opengraph meta is only sent after updating twice.
+ * When a notification is sent, Yoast has not yet saved the new Open Graph data. This action fires prior to that.
+ * We'll take the $_POST data and update the $post_body using Yoast's sanitize functions.
+ * This feels like a big hack, but without it new opengraph meta is only sent on the next update.
  *
  * @param  array  $post_body The request body to send.
  * @param  object $post      The WP_Post that is being pushed.
@@ -66,45 +89,86 @@ function dty_yoast_meta_keys( $prepend = '_' ) {
 function dty_fix_opengraph_meta_on_update( $post_body, $post ) {
 
 	/**
-	 * The $_POST keys are not prepended with `_` but the $post_body keys are prepended.
+	 * We need Yoast.
 	 */
-	foreach ( dty_yoast_meta_keys( '' ) as $yoast_meta_key ) {
-		$image_id  = 0;
-		$image_url = null;
-		if ( isset( $_POST[ $yoast_meta_key . '-id' ] ) ) {
-			/**
-			 * If the new ID is set in $_POST, try to get the attachment using this URL.
-			 * This seems more reliable and safe than using the URL from $_POST.
-			 * If for some reason we can't get the attachment URL, use the one in $_POST.
-			 */
-			$image_id  = intval( $_POST[ $yoast_meta_key . '-id' ] );
-			$image_url = wp_get_attachment_url( $image_id );
-			if ( ! $image_url ) {
-				$image_url = wp_strip_all_tags( $_POST[ $yoast_meta_key ] );
+	if ( ! class_exists( 'WPSEO_Utils' ) ) {
+		return false;
+	}
+
+	/**
+	 * NOTE: The $_POST keys are not prepended with `_` but the $post_body keys are prepended.
+	 */
+
+	/**
+	 * Fix image meta keys.
+	 */
+	foreach ( dty_yoast_meta_keys( '' ) as $yoast_meta_key => $type ) {
+		/**
+		 * Open graph images
+		 */
+		if ( 'image' === $type ) {
+			$image_id  = 0;
+			$image_url = null;
+			if ( isset( $_POST[ $yoast_meta_key . '-id' ] ) ) {
+				/**
+				 * If the new ID is set in $_POST, try to get the attachment using this URL.
+				 * This seems more reliable and safe than using the URL from $_POST.
+				 * If for some reason we can't get the attachment URL, use the one in $_POST.
+				 */
+				$image_id  = intval( $_POST[ $yoast_meta_key . '-id' ] );
+				$image_url = wp_get_attachment_image_url( $image_id, 'full' );
+
+				if ( ! $image_url ) {
+					$image_url = $_POST[ $yoast_meta_key ];
+				}
+
+				$image_url = WPSEO_Utils::sanitize_url( $image_url );
+
+				/**
+				 * Update the distributor_meta in $post_body.
+				 */
+				if ( $image_id > 0 && $image_url ) {
+					$post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key . '-id' ][0] = $image_id;
+					$post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ][0]         = $image_url;
+				}
 			}
 
-			/**
-			 * Update the distributor_meta in $post_body.
-			 */
-			if ( $image_id > 0 && $image_url ) {
-				$post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key . '-id' ][0] = $image_id;
-				$post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ][0]         = $image_url;
+			if ( $image_id <= 0 || ! $image_url ) {
+				/**
+				 * No ID in $post_body for this key. Unset from meta to delete from receiving site.
+				 */
+				if ( isset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ] ) ) {
+					unset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ] );
+				}
+				if ( isset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key . '-id' ] ) ) {
+					unset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key . '-id' ] );
+				}
 			}
-		}
+		} elseif ( 'text' === $type || 'textarea' === $type ) {
+			/**
+			 * Sanitize or remove titles and descriptions.
+			 */
+			if ( isset( $_POST[ $yoast_meta_key ] ) ) {
 
-		if ( $image_id <= 0 || ! $image_url ) {
-			/**
-			 * No ID in $post_body for this key. Unset from meta to delete from receiving site.
-			 */
-			if ( isset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ] ) ) {
-				unset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ] );
-			}
-			if ( isset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key . '-id' ] ) ) {
-				unset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key . '-id' ] );
+				$value = trim( $_POST[ $yoast_meta_key ] );
+
+				if ( 'textarea' === $type ) {
+					$value = str_replace( array( "\n", "\r", "\t", '  ' ), ' ', $value );
+				}
+
+				$post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ][0] = WPSEO_Utils::sanitize_text_field( $value );
+			} else {
+				/**
+				 * Delete
+				 */
+				if ( isset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ] ) ) {
+					unset( $post_body['post_data']['distributor_meta'][ '_' . $yoast_meta_key ] );
+				}
 			}
 		}
 	}
 
+	bt_log( $post_body );
 	return $post_body;
 }
 add_filter( 'dt_subscription_post_args', 'dty_fix_opengraph_meta_on_update', 1, 2 );
@@ -117,7 +181,7 @@ add_filter( 'dt_subscription_post_args', 'dty_fix_opengraph_meta_on_update', 1, 
  * @param array              $post_array The original post data retrieved via the connection.
  */
 function dty_sync_opengraph_image_pull( $new_post, $connection, $post_array ) {
-	foreach ( dty_yoast_meta_keys() as $yoast_meta_key ) {
+	foreach ( dty_yoast_image_meta_keys() as $yoast_meta_key ) {
 		if ( isset( $post_array['meta'][ $yoast_meta_key . '-id' ] ) ) {
 			dty_sync_opengraph_image( $new_post, $post_array['meta'][ $yoast_meta_key . '-id' ], $yoast_meta_key );
 		} else {
@@ -148,7 +212,7 @@ function dty_process_attributes( $new_post, $request, $update = false ) {
 		$meta = $params['post_data']['distributor_meta'];
 	}
 
-	foreach ( dty_yoast_meta_keys() as $yoast_meta_key ) {
+	foreach ( dty_yoast_image_meta_keys() as $yoast_meta_key ) {
 		if ( isset( $meta[ $yoast_meta_key . '-id' ] ) && ! empty( $meta[ $yoast_meta_key . '-id' ] ) ) {
 			dty_sync_opengraph_image( $new_post, $meta[ $yoast_meta_key . '-id' ], $yoast_meta_key );
 		} else {
