@@ -168,7 +168,6 @@ function dty_fix_opengraph_meta_on_update( $post_body, $post ) {
 		}
 	}
 
-	bt_log( $post_body );
 	return $post_body;
 }
 add_filter( 'dt_subscription_post_args', 'dty_fix_opengraph_meta_on_update', 1, 2 );
