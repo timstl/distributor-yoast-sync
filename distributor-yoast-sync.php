@@ -27,7 +27,7 @@ if ( ! defined( 'WPINC' ) ) {
 require_once plugin_dir_path( __FILE__ ) . 'lib/utils.php';
 
 /**
- * The Yoast meta keys to sync in type => key format.
+ * The Yoast meta keys to sync in key => type format.
  * Image keys will have '-id' appended to the end of the key.
  *
  * Example: _yoast_wpseo_opengraph-image is the URL and _yoast_wpseo_opengraph-image-id is the media ID.
@@ -104,7 +104,7 @@ function dty_fix_opengraph_meta_on_update( $post_body, $post ) {
 	 */
 
 	/**
-	 * Fix image meta keys.
+	 * Fix yoast meta keys provided in dty_yoast_meta_keys().
 	 */
 	foreach ( dty_yoast_meta_keys( '' ) as $yoast_meta_key => $type ) {
 		/**
